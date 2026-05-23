@@ -9,10 +9,13 @@ const ConfigSchema = z.object({
   OPENAI_EMBEDDING_MODEL: z.string().trim().min(1).default("text-embedding-3-large"),
   IFSQN_QDRANT_URL: z.string().url(),
   IFSQN_COLLECTION: z.string().trim().min(1).default("ifsqn_forum_posts_large"),
+  IFSQN_FTS_DB_PATH: z.string().trim().min(1).optional(),
   ELSMAR_QDRANT_URL: z.string().url(),
   ELSMAR_COLLECTION: z.string().trim().min(1).default("elsmar_forum_posts_large"),
+  ELSMAR_FTS_DB_PATH: z.string().trim().min(1).optional(),
   MAX_CANDIDATES: z.coerce.number().int().min(5).max(200).default(60),
   MAX_RESULTS: z.coerce.number().int().min(1).max(50).default(20),
+  SQLITE3_BIN: z.string().trim().min(1).default("sqlite3"),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema> & {

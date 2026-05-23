@@ -1,5 +1,6 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
+import { access } from "node:fs/promises";
 import { loadConfig } from "./config.js";
 import { createKnowledgeMcpServer } from "./server.js";
 
@@ -22,6 +23,22 @@ app.get("/health", async (_req, res) => {
       }
     }),
   ));
+  const fts = Object.fromEntries(await Promise.all(
+    [
+      ["ifsqn", config.IFSQN_FTS_DB_PATH],
+      ["elsmar", config.ELSMAR_FTS_DB_PATH],
+    ].map(async ([name, path]) => {
+      if (!path) {
+        return [name, "disabled"];
+      }
+      try {
+        await access(path);
+        return [name, "ok"];
+      } catch {
+        return [name, "error"];
+      }
+    }),
+  ));
 
   res.json({
     status: "ok",
@@ -34,6 +51,7 @@ app.get("/health", async (_req, res) => {
     },
     embeddingModel: config.OPENAI_EMBEDDING_MODEL,
     qdrant,
+    fts,
   });
 });
 
