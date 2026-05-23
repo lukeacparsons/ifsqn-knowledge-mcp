@@ -44,18 +44,6 @@ for (const method of ["get", "delete"] as const) {
 }
 
 app.post(config.mcpPath, async (req, res) => {
-  if (config.MCP_BEARER_TOKEN) {
-    const authorization = req.headers.authorization;
-    const header = Array.isArray(authorization) ? authorization[0] : authorization;
-    if (header !== `Bearer ${config.MCP_BEARER_TOKEN}`) {
-      res.status(401).json({
-        error: "invalid_token",
-        error_description: "Missing or invalid bearer token.",
-      });
-      return;
-    }
-  }
-
   const server = createKnowledgeMcpServer(config);
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

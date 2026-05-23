@@ -26,4 +26,3 @@ The service retrieves from one or both Qdrant stores, pulls a larger candidate s
 - `OPENAI_EMBEDDING_MODEL` default `text-embedding-3-large`
 - `MAX_CANDIDATES` default `60`
 - `MAX_RESULTS` default `20`
-- `MCP_BEARER_TOKEN` optional; when set, `POST /mcp` requires `Authorization: Bearer <token>`

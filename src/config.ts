@@ -13,7 +13,6 @@ const ConfigSchema = z.object({
   ELSMAR_COLLECTION: z.string().trim().min(1).default("elsmar_forum_posts_large"),
   MAX_CANDIDATES: z.coerce.number().int().min(5).max(200).default(60),
   MAX_RESULTS: z.coerce.number().int().min(1).max(50).default(20),
-  MCP_BEARER_TOKEN: z.string().trim().min(8).optional(),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema> & {
