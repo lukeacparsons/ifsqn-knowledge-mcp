@@ -13,6 +13,7 @@ const SearchFiltersSchema = z.object({
 
 const SearchInputSchema = {
   query: z.string().min(1).describe("Natural-language search query."),
+  corpus: z.enum(["ifsqn", "elsmar", "both"]).optional().describe("Which forum corpus to search. Defaults to both."),
   top_k: z.number().int().min(1).max(20).optional().describe("Number of final chunks to return."),
   candidate_k: z.number().int().min(5).max(100).optional().describe("Number of vector candidates to retrieve before reranking."),
   filters: SearchFiltersSchema.describe("Optional exact metadata filters."),
@@ -43,15 +44,15 @@ function errorContent(error: unknown) {
 
 export function createKnowledgeMcpServer(config: AppConfig): McpServer {
   const server = new McpServer({
-    name: "ifsqn-knowledge-mcp",
-    version: "0.1.0",
+    name: "food-quality-knowledge-mcp",
+    version: "0.2.0",
   });
 
   server.registerTool(
     "search_knowledge_base",
     {
-      title: "Search IFSQN knowledge base",
-      description: "Search the embedded IFSQN forum corpus and return citation-ready chunks with source URLs and metadata.",
+      title: "Search food quality knowledge base",
+      description: "Search the embedded IFSQN and/or Elsmar forum corpora and return citation-ready chunks with source URLs and metadata.",
       inputSchema: SearchInputSchema,
       annotations: readOnlyAnnotations,
     },

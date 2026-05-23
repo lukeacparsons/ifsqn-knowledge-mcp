@@ -10,6 +10,7 @@ export type SearchFilters = {
 
 export type SearchInput = {
   query: string;
+  corpus?: "ifsqn" | "elsmar" | "both" | undefined;
   top_k?: number | undefined;
   candidate_k?: number | undefined;
   filters?: SearchFilters | undefined;
@@ -23,6 +24,7 @@ type QdrantPoint = {
 
 export type SearchResult = {
   rank: number;
+  corpus: "ifsqn" | "elsmar";
   score: number;
   vector_score: number;
   lexical_score: number;
@@ -48,11 +50,21 @@ export type SearchResult = {
 
 export type SearchOutput = {
   query: string;
-  corpus: "ifsqn_forum";
-  collection: string;
+  corpus: "ifsqn" | "elsmar" | "both";
+  searched_corpora: Array<{
+    corpus: "ifsqn" | "elsmar";
+    collection: string;
+    retrieved_candidates: number;
+  }>;
   embedding_model: string;
   retrieved_candidates: number;
   results: SearchResult[];
+};
+
+type CorpusConfig = {
+  corpus: "ifsqn" | "elsmar";
+  qdrantUrl: string;
+  collection: string;
 };
 
 function asString(value: unknown): string | null {
@@ -145,12 +157,12 @@ async function embedQuery(config: AppConfig, query: string): Promise<number[]> {
   return embedding;
 }
 
-async function searchQdrant(config: AppConfig, vector: number[], input: SearchInput): Promise<QdrantPoint[]> {
+async function searchQdrant(config: AppConfig, corpus: CorpusConfig, vector: number[], input: SearchInput): Promise<QdrantPoint[]> {
   const candidateLimit = Math.min(
     input.candidate_k ?? config.MAX_CANDIDATES,
     config.MAX_CANDIDATES,
   );
-  const url = new URL(`/collections/${encodeURIComponent(config.IFSQN_COLLECTION)}/points/search`, config.IFSQN_QDRANT_URL);
+  const url = new URL(`/collections/${encodeURIComponent(corpus.collection)}/points/search`, corpus.qdrantUrl);
   const payload = await fetchJson(url.toString(), {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -170,7 +182,7 @@ async function searchQdrant(config: AppConfig, vector: number[], input: SearchIn
   return payload.result;
 }
 
-function toResult(point: QdrantPoint, query: string, rank: number): SearchResult {
+function toResult(corpus: "ifsqn" | "elsmar", point: QdrantPoint, query: string, rank: number): SearchResult {
   const payload = point.payload ?? {};
   const text = asString(payload.text) ?? "";
   const lexical = lexicalScore(payload, query);
@@ -180,6 +192,7 @@ function toResult(point: QdrantPoint, query: string, rank: number): SearchResult
 
   return {
     rank,
+    corpus,
     score: Number(combined.toFixed(6)),
     vector_score: Number(point.score.toFixed(6)),
     lexical_score: Number(lexical.toFixed(6)),
@@ -204,22 +217,56 @@ function toResult(point: QdrantPoint, query: string, rank: number): SearchResult
   };
 }
 
+function getCorpora(config: AppConfig, requested: SearchInput["corpus"]): CorpusConfig[] {
+  const corpus = requested ?? "both";
+  const configs: Record<"ifsqn" | "elsmar", CorpusConfig> = {
+    ifsqn: {
+      corpus: "ifsqn",
+      qdrantUrl: config.IFSQN_QDRANT_URL,
+      collection: config.IFSQN_COLLECTION,
+    },
+    elsmar: {
+      corpus: "elsmar",
+      qdrantUrl: config.ELSMAR_QDRANT_URL,
+      collection: config.ELSMAR_COLLECTION,
+    },
+  };
+
+  if (corpus === "both") {
+    return [configs.ifsqn, configs.elsmar];
+  }
+
+  return [configs[corpus]];
+}
+
 export async function searchKnowledgeBase(config: AppConfig, input: SearchInput): Promise<SearchOutput> {
   const topK = Math.min(input.top_k ?? 8, config.MAX_RESULTS);
+  const requestedCorpus = input.corpus ?? "both";
+  const corpora = getCorpora(config, requestedCorpus);
   const vector = await embedQuery(config, input.query);
-  const points = await searchQdrant(config, vector, input);
-  const results = points
-    .map((point, index) => toResult(point, input.query, index + 1))
+  const searches = await Promise.all(
+    corpora.map(async (corpus) => ({
+      corpus,
+      points: await searchQdrant(config, corpus, vector, input),
+    })),
+  );
+  const results = searches
+    .flatMap(({ corpus, points }) => points.map((point, index) => toResult(corpus.corpus, point, input.query, index + 1)))
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)
     .map((result, index) => ({ ...result, rank: index + 1 }));
+  const searchedCorpora = searches.map(({ corpus, points }) => ({
+    corpus: corpus.corpus,
+    collection: corpus.collection,
+    retrieved_candidates: points.length,
+  }));
 
   return {
     query: input.query,
-    corpus: "ifsqn_forum",
-    collection: config.IFSQN_COLLECTION,
+    corpus: requestedCorpus,
+    searched_corpora: searchedCorpora,
     embedding_model: config.OPENAI_EMBEDDING_MODEL,
-    retrieved_candidates: points.length,
+    retrieved_candidates: searchedCorpora.reduce((sum, item) => sum + item.retrieved_candidates, 0),
     results,
   };
 }

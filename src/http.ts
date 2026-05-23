@@ -9,21 +9,29 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", async (_req, res) => {
-  const qdrantHealthUrl = new URL("/collections", config.IFSQN_QDRANT_URL);
-  let qdrant: "ok" | "error" = "ok";
-  try {
-    const response = await fetch(qdrantHealthUrl);
-    qdrant = response.ok ? "ok" : "error";
-  } catch {
-    qdrant = "error";
-  }
+  const qdrant = Object.fromEntries(await Promise.all(
+    [
+      ["ifsqn", config.IFSQN_QDRANT_URL],
+      ["elsmar", config.ELSMAR_QDRANT_URL],
+    ].map(async ([name, url]) => {
+      try {
+        const response = await fetch(new URL("/collections", url));
+        return [name, response.ok ? "ok" : "error"];
+      } catch {
+        return [name, "error"];
+      }
+    }),
+  ));
 
   res.json({
     status: "ok",
     transport: "streamable-http",
     path: config.mcpPath,
     publicBaseUrl: config.publicBaseUrl,
-    collection: config.IFSQN_COLLECTION,
+    collections: {
+      ifsqn: config.IFSQN_COLLECTION,
+      elsmar: config.ELSMAR_COLLECTION,
+    },
     embeddingModel: config.OPENAI_EMBEDDING_MODEL,
     qdrant,
   });
